@@ -1,0 +1,285 @@
+# Import Necessary Libraries
+
+import os
+
+from pyPS4Controller.controller import Controller
+
+import pigpio
+
+import time
+
+ 
+
+os.system("sudo pigpiod") #Launch GPIO library
+
+time.sleep(1)
+
+ 
+
+#ESC = 4
+
+rt_step_pin = 22; rt_dir_pin = 23; rt_en_pin = 24; rt_vcc_pin = 3;
+
+lf_step_pin = 26; lf_dir_pin = 20; lf_en_pin = 21; lf_vcc_pin = 4;
+
+ 
+
+pi = pigpio.pi()
+
+ 
+
+# Define functions to execute based on button being pressed
+
+class MyController(Controller):
+
+        def __init__(self, **kwargs):
+
+                Controller.__init__(self,**kwargs)
+
+ 
+
+                # initialize interrupt
+
+                self.right_fin_target = 0 ; self.right_fin_current_step = 0 ; self.right_diff = 0
+
+                self.left_fin_target = 0 ; self.left_fin_current_step = 0 ; self.left_diff = 0
+
+ 
+
+        def D_PAD_CTRL(self):
+
+                right_diff = self.right_fin_target - self.right_fin_current_step
+
+                left_diff = self.left_fin_target - self.left_fin_current_step
+
+ 
+
+                print("RIGHT DIFF:", right_diff)
+
+                print("LEFT_DIFF:", left_diff)
+
+ 
+
+                for _ in range(max(abs(right_diff),abs(left_diff))):
+
+                        print("RIGHT DIFF:", right_diff)
+
+                        print("LEFT DIFF:", left_diff)
+
+                        if right_diff > 0:
+
+                                pi.write(rt_vcc_pin, 1)
+
+                                pi.write(rt_en_pin,0)
+
+                                pi.write(rt_dir_pin,1)
+
+                                self.right_fin_current_step += 1
+
+                                right_diff = self.right_fin_target - self.right_fin_current_step
+
+                        elif right_diff < 0:
+
+                                pi.write(rt_vcc_pin, 1)
+
+                                pi.write(rt_en_pin,0)
+
+                                pi.write(rt_dir_pin,0)
+
+                                self.right_fin_current_step -= 1
+
+                                right_diff = self.right_fin_target - self.right_fin_current_step
+
+                        elif right_diff == 0:
+
+                                pi.write(rt_vcc_pin, 0)
+
+                                pi.write(rt_en_pin,1)
+
+                                right_diff = 0
+
+ 
+
+                        if left_diff > 0:
+
+                                pi.write(lf_vcc_pin, 1)
+
+                                pi.write(lf_en_pin,0)
+
+                                pi.write(lf_dir_pin,1)
+
+                                self.left_fin_current_step += 1
+
+                                left_diff = self.left_fin_target - self.left_fin_current_step
+
+                        elif left_diff < 0:
+
+                                pi.write(lf_vcc_pin, 1)
+
+                                pi.write(lf_en_pin,0)
+
+                                pi.write(lf_dir_pin,0)
+
+                                self.left_fin_current_step -= 1
+
+                                left_diff = self.left_fin_target - self.left_fin_current_step
+
+                        elif left_diff == 0:
+
+                                pi.write(lf_vcc_pin, 0)
+
+                                pi.write(lf_en_pin,1)
+
+                                left_diff = 0
+
+                       
+
+                        pi.write(rt_step_pin,1)
+
+                        pi.write(lf_step_pin,1)
+
+                        time.sleep(0.01)
+
+                        pi.write(rt_step_pin,0)
+
+                        pi.write(lf_step_pin,0)
+
+                        time.sleep(0.01)
+
+ 
+
+        def initialize_prop(self):
+
+                print("Provide High Voltage to Prop")
+
+                time.sleep(1)
+
+ 
+
+                pi.set_servo_pulsewidth(ESC,2000)
+
+                time.sleep(1)
+
+                pi.set_servo_pulsewidth(ESC,1500)
+
+                time.sleep(1)
+
+ 
+
+                print("Initialization Complete")
+
+ 
+
+        def on_playstation_button_press(self):
+
+                self.initialize_prop()
+
+ 
+
+        def on_R2_press(self,value):
+
+                pulse_width = int(500*(value+32768)/65535+1500)
+
+                pi.set_servo_pulsewidth(ESC,pulse_width)
+
+ 
+
+        def on_R2_release(self):
+
+                pulse_width = 1500
+
+                pi.set_servo_pulsewidth(ESC,pulse_width)
+
+ 
+
+        def on_right_arrow_press(self):
+
+                self.right_fin_target = -25
+
+                self.left_fin_target = 0
+
+ 
+
+                self.D_PAD_CTRL()
+
+ 
+
+        def on_left_arrow_press(self):
+
+                self.right_fin_target = 0
+
+                self.left_fin_target = -25
+
+ 
+
+                self.D_PAD_CTRL()
+
+ 
+
+        def on_left_right_arrow_release(self):
+
+                self.right_fin_target = 0
+
+                self.left_fin_target = 0
+
+ 
+
+                self.D_PAD_CTRL()
+
+ 
+
+        def on_down_arrow_press(self):
+
+                self.right_fin_target = -25
+
+                self.left_fin_target = -25
+
+ 
+
+                self.D_PAD_CTRL()
+
+ 
+
+        def on_up_arrow_press(self):
+
+                self.right_fin_target = 25
+
+                self.left_fin_target = 25
+
+ 
+
+                self.D_PAD_CTRL()
+
+ 
+
+        def on_up_down_arrow_release(self):
+
+                self.right_fin_target = 0
+
+                self.left_fin_target = 0
+
+ 
+
+                self.D_PAD_CTRL()
+
+ 
+
+if __name__ == "__main__":
+
+       
+
+        # Create controller at interface 'dev/input/js0'
+
+        controller = MyController(interface='/dev/input/js0', connecting_using_ds4drv=False)
+
+ 
+
+        # Listen for events and execute associated GPIO commands
+
+        controller.listen()
+
+   
+
+        # Clean up pigpio
+
+        pi.stop()
